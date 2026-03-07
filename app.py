@@ -1,4 +1,9 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, jsonify
+from database import init_seed
 from routes.auth   import auth_bp
 from routes.stores import stores_bp
 from routes.admin  import admin_bp
@@ -26,4 +31,5 @@ def health():
     return jsonify({"success": True, "message": "BMG Smart Retail API is running"}), 200
 
 if __name__ == "__main__":
+    init_seed()   # chỉ chạy lần đầu tiên
     app.run(debug=True, port=5000)
