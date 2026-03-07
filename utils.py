@@ -6,14 +6,10 @@ from flask import request, jsonify
 from datetime import datetime, timedelta
 import os
 
-SECRET_KEY  = os.environ.get("SECRET_KEY", "bmg-secret-key-change-in-production")
+SECRET_KEY   = os.environ.get("SECRET_KEY", "bmg-secret-key-change-in-production")
 TOKEN_EXPIRY = int(os.environ.get("TOKEN_EXPIRY_HOURS", 24))
 
 
-# ----------------------------------------------------------------
-# Password  (sha256 + salt — thay bcrypt do môi trường offline)
-# Production nên dùng bcrypt hoặc argon2
-# ----------------------------------------------------------------
 def hash_password(plain: str) -> str:
     salt = secrets.token_hex(16)
     h    = hashlib.sha256(f"{salt}{plain}".encode()).hexdigest()
@@ -27,9 +23,6 @@ def check_password(plain: str, hashed: str) -> bool:
         return False
 
 
-# ----------------------------------------------------------------
-# JWT
-# ----------------------------------------------------------------
 def generate_token(user_id: int, role: str) -> str:
     payload = {
         "user_id": user_id,
@@ -42,9 +35,6 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
 
 
-# ----------------------------------------------------------------
-# Decorators
-# ----------------------------------------------------------------
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -56,7 +46,7 @@ def token_required(f):
         if not token:
             return jsonify({
                 "success": False,
-                "message": "Token không tồn tại. Vui lòng đăng nhập"
+                "message": "Token not found. Please log in."
             }), 401
 
         try:
@@ -64,12 +54,12 @@ def token_required(f):
         except jwt.ExpiredSignatureError:
             return jsonify({
                 "success": False,
-                "message": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại"
+                "message": "Session expired. Please log in again."
             }), 401
         except jwt.InvalidTokenError:
             return jsonify({
                 "success": False,
-                "message": "Token không hợp lệ"
+                "message": "Invalid token."
             }), 401
 
         return f(current_user, *args, **kwargs)
@@ -83,7 +73,7 @@ def role_required(*roles):
             if current_user["role"] not in roles:
                 return jsonify({
                     "success": False,
-                    "message": "Bạn không có quyền thực hiện thao tác này"
+                    "message": "You do not have permission to perform this action."
                 }), 403
             return f(current_user, *args, **kwargs)
         return decorated
