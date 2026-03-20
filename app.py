@@ -3,16 +3,20 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify
+from flask_cors import CORS
 from database import init_seed
-from routes.auth   import auth_bp
-from routes.stores import stores_bp
-from routes.admin  import admin_bp
+from routes.auth     import auth_bp
+from routes.stores   import stores_bp
+from routes.admin    import admin_bp
+from routes.checkins import checkins_bp
 
 app = Flask(__name__)
+CORS(app)
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(stores_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(checkins_bp)
 
 @app.errorhandler(404)
 def not_found(e):
@@ -32,4 +36,4 @@ def health():
 
 if __name__ == "__main__":
     init_seed()
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
