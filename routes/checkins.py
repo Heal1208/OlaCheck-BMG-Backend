@@ -1,8 +1,6 @@
-
 from flask import Blueprint, request, jsonify
 from database import get_db
 from utils import token_required, role_required
-import math
 
 checkins_bp = Blueprint("checkins", __name__, url_prefix="/api")
 
@@ -12,42 +10,26 @@ SALES_ROLES = (
 )
 ADMIN_ROLES = ("Sales_Admin", "Sales_Manager", "Director", "Deputy_Director")
 
-GPS_RADIUS_METERS = 200
-
 
 # ================================================================
-# A-07: Store Check-in (GPS)
+# A-07: Store Check-in
 # ================================================================
-
-def haversine(lat1, lng1, lat2, lng2):
-    R = 6371000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lng2 - lng1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
 
 # POST /api/checkins
-# Body: { store_id, gps_lat, gps_lng, note? }
+# Body: { store_id, note? }
 @checkins_bp.route("/checkins", methods=["POST"])
 @token_required
 @role_required(*SALES_ROLES)
 def create_checkin(current_user):
     data = request.get_json()
 
-    required = ["store_id", "gps_lat", "gps_lng"]
-    missing = [f for f in required if data.get(f) is None]
-    if missing:
-        return jsonify({
-            "success": False,
-            "message": f"Missing required fields: {', '.join(missing)}"
-        }), 400
+    if not data or not data.get("store_id"):
+        return jsonify({"success": False, "message": "store_id is required."}), 400
 
     conn = get_db()
 
     store = conn.execute(
-        "SELECT store_id, store_name, latitude, longitude, assigned_staff_id FROM stores WHERE store_id = ? AND is_active = 1",
+        "SELECT store_id, store_name, assigned_staff_id FROM stores WHERE store_id = ? AND is_active = 1",
         (data["store_id"],)
     ).fetchone()
 
@@ -55,36 +37,19 @@ def create_checkin(current_user):
         conn.close()
         return jsonify({"success": False, "message": "Store not found."}), 404
 
-    # Verify staff is assigned to this store (except managers)
     manager_roles = ("Sales_Manager", "Director", "Deputy_Director")
     if current_user["role"] not in manager_roles:
         if store["assigned_staff_id"] != current_user["user_id"]:
             conn.close()
-            return jsonify({
-                "success": False,
-                "message": "You are not assigned to this store."
-            }), 403
-
-    # GPS verification
-    gps_verified = 1
-    if store["latitude"] != 0 and store["longitude"] != 0:
-        distance = haversine(
-            float(data["gps_lat"]), float(data["gps_lng"]),
-            float(store["latitude"]), float(store["longitude"])
-        )
-        gps_verified = 1 if distance <= GPS_RADIUS_METERS else 0
+            return jsonify({"success": False, "message": "You are not assigned to this store."}), 403
 
     cursor = conn.execute(
         """
         INSERT INTO store_checks
             (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'in_progress')
+        VALUES (?, ?, 0, 0, 1, ?, 'pending')
         """,
-        (
-            data["store_id"], current_user["user_id"],
-            data["gps_lat"], data["gps_lng"],
-            gps_verified, data.get("note")
-        )
+        (data["store_id"], current_user["user_id"], data.get("note"))
     )
     conn.commit()
     check_id = cursor.lastrowid
@@ -94,14 +59,13 @@ def create_checkin(current_user):
         "success": True,
         "message": "Check-in successful.",
         "data": {
-            "check_id":     check_id,
-            "store_name":   store["store_name"],
-            "gps_verified": bool(gps_verified),
+            "check_id":   check_id,
+            "store_name": store["store_name"],
         }
     }), 201
 
 
-# GET /api/checkins?store_id=&date=
+# GET /api/checkins
 @checkins_bp.route("/checkins", methods=["GET"])
 @token_required
 @role_required(*SALES_ROLES)
@@ -111,12 +75,11 @@ def list_checkins(current_user):
 
     query = """
         SELECT  c.check_id, c.store_id, c.staff_id,
-                c.check_time, c.gps_lat, c.gps_lng,
-                c.gps_verified, c.note, c.status,
+                c.check_time, c.note, c.status,
                 s.store_name, u.full_name AS staff_name
         FROM    store_checks c
         JOIN    stores s ON c.store_id = s.store_id
-        JOIN    users  u ON c.staff_id  = u.user_id
+        JOIN    users  u ON c.staff_id = u.user_id
         WHERE   1=1
     """
     params = []
@@ -135,14 +98,11 @@ def list_checkins(current_user):
 
     query += " ORDER BY c.check_time DESC LIMIT 50"
 
-    conn    = get_db()
-    checks  = conn.execute(query, params).fetchall()
+    conn   = get_db()
+    checks = conn.execute(query, params).fetchall()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "data": [dict(c) for c in checks]
-    }), 200
+    return jsonify({"success": True, "data": [dict(c) for c in checks]}), 200
 
 
 # GET /api/checkins/<check_id>
@@ -150,13 +110,13 @@ def list_checkins(current_user):
 @token_required
 @role_required(*SALES_ROLES)
 def get_checkin(current_user, check_id):
-    conn = get_db()
+    conn  = get_db()
     check = conn.execute(
         """
         SELECT  c.*, s.store_name, u.full_name AS staff_name
         FROM    store_checks c
         JOIN    stores s ON c.store_id = s.store_id
-        JOIN    users  u ON c.staff_id  = u.user_id
+        JOIN    users  u ON c.staff_id = u.user_id
         WHERE   c.check_id = ?
         """,
         (check_id,)
@@ -174,7 +134,7 @@ def get_checkin(current_user, check_id):
 @token_required
 @role_required(*SALES_ROLES)
 def complete_checkin(current_user, check_id):
-    conn = get_db()
+    conn  = get_db()
     check = conn.execute(
         "SELECT check_id, staff_id FROM store_checks WHERE check_id = ?",
         (check_id,)
@@ -213,8 +173,7 @@ def create_stock_entries(current_user, check_id):
     if not data or not data.get("entries"):
         return jsonify({"success": False, "message": "entries array is required."}), 400
 
-    conn = get_db()
-
+    conn  = get_db()
     check = conn.execute(
         "SELECT check_id, store_id, staff_id FROM store_checks WHERE check_id = ?",
         (check_id,)
@@ -228,9 +187,9 @@ def create_stock_entries(current_user, check_id):
         conn.close()
         return jsonify({"success": False, "message": "You can only add entries to your own check-ins."}), 403
 
-    inserted    = []
-    low_stock   = []
-    store_id    = check["store_id"]
+    inserted  = []
+    low_stock = []
+    store_id  = check["store_id"]
 
     for entry in data["entries"]:
         product_id = entry.get("product_id")
@@ -247,7 +206,6 @@ def create_stock_entries(current_user, check_id):
         if not product:
             continue
 
-        # Insert or replace stock entry
         existing = conn.execute(
             "SELECT entry_id FROM stock_entries WHERE check_id = ? AND product_id = ?",
             (check_id, product_id)
@@ -260,7 +218,7 @@ def create_stock_entries(current_user, check_id):
             )
             entry_id = existing["entry_id"]
         else:
-            cursor = conn.execute(
+            cursor   = conn.execute(
                 "INSERT INTO stock_entries (check_id, product_id, quantity_on_shelf) VALUES (?, ?, ?)",
                 (check_id, product_id, quantity)
             )
@@ -268,7 +226,6 @@ def create_stock_entries(current_user, check_id):
 
         inserted.append({"entry_id": entry_id, "product_id": product_id, "quantity_on_shelf": quantity})
 
-        # A-10: Auto create low stock alert
         threshold = product["low_stock_threshold"]
         if quantity < threshold:
             existing_alert = conn.execute(
@@ -278,11 +235,7 @@ def create_stock_entries(current_user, check_id):
 
             if not existing_alert:
                 conn.execute(
-                    """
-                    INSERT INTO stock_alerts
-                        (store_id, product_id, check_id, quantity_at_alert, alert_type)
-                    VALUES (?, ?, ?, ?, 'low_stock')
-                    """,
+                    "INSERT INTO stock_alerts (store_id, product_id, check_id, quantity_at_alert, alert_type) VALUES (?, ?, ?, ?, 'low_stock')",
                     (store_id, product_id, check_id, quantity)
                 )
                 low_stock.append({
@@ -299,7 +252,7 @@ def create_stock_entries(current_user, check_id):
         "success": True,
         "message": f"{len(inserted)} stock entries saved.",
         "data": {
-            "entries":         inserted,
+            "entries":          inserted,
             "low_stock_alerts": low_stock
         }
     }), 201
@@ -310,7 +263,7 @@ def create_stock_entries(current_user, check_id):
 @token_required
 @role_required(*SALES_ROLES)
 def get_stock_entries(current_user, check_id):
-    conn = get_db()
+    conn    = get_db()
     entries = conn.execute(
         """
         SELECT  se.entry_id, se.product_id, se.quantity_on_shelf, se.created_at,
@@ -324,10 +277,7 @@ def get_stock_entries(current_user, check_id):
     ).fetchall()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "data": [dict(e) for e in entries]
-    }), 200
+    return jsonify({"success": True, "data": [dict(e) for e in entries]}), 200
 
 
 # ================================================================
@@ -337,7 +287,6 @@ def get_stock_entries(current_user, check_id):
 NEAR_EXPIRY_DAYS = 30
 
 # POST /api/stock-entries/<entry_id>/expiry-records
-# Body: { batch_code, production_date, expiry_date, quantity }
 @checkins_bp.route("/stock-entries/<int:entry_id>/expiry-records", methods=["POST"])
 @token_required
 @role_required(*SALES_ROLES)
@@ -347,13 +296,9 @@ def create_expiry_record(current_user, entry_id):
     required = ["batch_code", "production_date", "expiry_date", "quantity"]
     missing  = [f for f in required if not data.get(f)]
     if missing:
-        return jsonify({
-            "success": False,
-            "message": f"Missing required fields: {', '.join(missing)}"
-        }), 400
+        return jsonify({"success": False, "message": f"Missing required fields: {', '.join(missing)}"}), 400
 
-    conn = get_db()
-
+    conn  = get_db()
     entry = conn.execute(
         """
         SELECT  se.entry_id, se.check_id, sc.staff_id, sc.store_id
@@ -370,33 +315,20 @@ def create_expiry_record(current_user, entry_id):
 
     if entry["staff_id"] != current_user["user_id"]:
         conn.close()
-        return jsonify({
-            "success": False,
-            "message": "You can only add expiry records to your own entries."
-        }), 403
+        return jsonify({"success": False, "message": "You can only add expiry records to your own entries."}), 403
 
-    # Calculate is_near_expiry
     from datetime import date, datetime
-    today       = date.today()
-    expiry_date = datetime.strptime(data["expiry_date"], "%Y-%m-%d").date()
-    days_left   = (expiry_date - today).days
+    today          = date.today()
+    expiry_date    = datetime.strptime(data["expiry_date"], "%Y-%m-%d").date()
+    days_left      = (expiry_date - today).days
     is_near_expiry = 1 if 0 <= days_left <= NEAR_EXPIRY_DAYS else 0
 
-    cursor = conn.execute(
-        """
-        INSERT INTO expiry_records
-            (entry_id, batch_code, production_date, expiry_date, quantity, is_near_expiry)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            entry_id, data["batch_code"],
-            data["production_date"], data["expiry_date"],
-            data["quantity"], is_near_expiry
-        )
+    cursor    = conn.execute(
+        "INSERT INTO expiry_records (entry_id, batch_code, production_date, expiry_date, quantity, is_near_expiry) VALUES (?, ?, ?, ?, ?, ?)",
+        (entry_id, data["batch_code"], data["production_date"], data["expiry_date"], data["quantity"], is_near_expiry)
     )
     expiry_id = cursor.lastrowid
 
-    # Create near-expiry alert if needed
     if is_near_expiry:
         product_id = conn.execute(
             "SELECT product_id FROM stock_entries WHERE entry_id = ?", (entry_id,)
@@ -409,11 +341,7 @@ def create_expiry_record(current_user, entry_id):
 
         if not existing_alert:
             conn.execute(
-                """
-                INSERT INTO stock_alerts
-                    (store_id, product_id, check_id, quantity_at_alert, alert_type)
-                VALUES (?, ?, ?, ?, 'near_expiry')
-                """,
+                "INSERT INTO stock_alerts (store_id, product_id, check_id, quantity_at_alert, alert_type) VALUES (?, ?, ?, ?, 'near_expiry')",
                 (entry["store_id"], product_id, entry["check_id"], data["quantity"])
             )
 
@@ -424,7 +352,7 @@ def create_expiry_record(current_user, entry_id):
         "success": True,
         "message": "Expiry record saved.",
         "data": {
-            "expiry_id":     expiry_id,
+            "expiry_id":      expiry_id,
             "is_near_expiry": bool(is_near_expiry),
             "days_left":      days_left
         }
@@ -436,17 +364,14 @@ def create_expiry_record(current_user, entry_id):
 @token_required
 @role_required(*SALES_ROLES)
 def get_expiry_records(current_user, entry_id):
-    conn = get_db()
+    conn    = get_db()
     records = conn.execute(
         "SELECT * FROM expiry_records WHERE entry_id = ? ORDER BY expiry_date",
         (entry_id,)
     ).fetchall()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "data": [dict(r) for r in records]
-    }), 200
+    return jsonify({"success": True, "data": [dict(r) for r in records]}), 200
 
 
 # ================================================================
@@ -495,13 +420,7 @@ def list_alerts(current_user):
     alerts = conn.execute(query, params).fetchall()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "data": {
-            "total":  len(alerts),
-            "alerts": [dict(a) for a in alerts]
-        }
-    }), 200
+    return jsonify({"success": True, "data": {"total": len(alerts), "alerts": [dict(a) for a in alerts]}}), 200
 
 
 # PUT /api/alerts/<alert_id>/resolve
@@ -524,13 +443,7 @@ def resolve_alert(current_user, alert_id):
         return jsonify({"success": False, "message": "Alert already resolved."}), 400
 
     conn.execute(
-        """
-        UPDATE stock_alerts
-        SET    is_resolved = 1,
-               resolved_by = ?,
-               resolved_at = CURRENT_TIMESTAMP
-        WHERE  alert_id = ?
-        """,
+        "UPDATE stock_alerts SET is_resolved = 1, resolved_by = ?, resolved_at = CURRENT_TIMESTAMP WHERE alert_id = ?",
         (current_user["user_id"], alert_id)
     )
     conn.commit()
@@ -539,7 +452,7 @@ def resolve_alert(current_user, alert_id):
     return jsonify({"success": True, "message": "Alert resolved."}), 200
 
 
-# GET /api/products  — danh sách products để dùng khi nhập stock
+# GET /api/products
 @checkins_bp.route("/products", methods=["GET"])
 @token_required
 @role_required(*SALES_ROLES)
@@ -550,50 +463,31 @@ def list_products(current_user):
     ).fetchall()
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "data": [dict(p) for p in products]
-    }), 200
+    return jsonify({"success": True, "data": [dict(p) for p in products]}), 200
 
 
-# POST /api/products  — thêm product (admin only)
+# POST /api/products
 @checkins_bp.route("/products", methods=["POST"])
 @token_required
 @role_required(*ADMIN_ROLES)
 def create_product(current_user):
-    data = request.get_json()
-
+    data    = request.get_json()
     required = ["product_name", "sku", "category"]
     missing  = [f for f in required if not data.get(f)]
     if missing:
-        return jsonify({
-            "success": False,
-            "message": f"Missing required fields: {', '.join(missing)}"
-        }), 400
+        return jsonify({"success": False, "message": f"Missing required fields: {', '.join(missing)}"}), 400
 
     conn = get_db()
-
     if conn.execute("SELECT product_id FROM products WHERE sku = ?", (data["sku"],)).fetchone():
         conn.close()
         return jsonify({"success": False, "message": "SKU already exists."}), 409
 
     cursor = conn.execute(
-        """
-        INSERT INTO products (product_name, sku, category, unit, low_stock_threshold)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            data["product_name"], data["sku"], data["category"],
-            data.get("unit", "bottle"),
-            data.get("low_stock_threshold", 10)
-        )
+        "INSERT INTO products (product_name, sku, category, unit, low_stock_threshold) VALUES (?, ?, ?, ?, ?)",
+        (data["product_name"], data["sku"], data["category"], data.get("unit", "bottle"), data.get("low_stock_threshold", 10))
     )
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
 
-    return jsonify({
-        "success": True,
-        "message": "Product created.",
-        "data": {"product_id": new_id}
-    }), 201
+    return jsonify({"success": True, "message": "Product created.", "data": {"product_id": new_id}}), 201
