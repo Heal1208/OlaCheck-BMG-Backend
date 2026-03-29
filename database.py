@@ -82,8 +82,7 @@ def init_seed():
                 "address":           "12 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-                "latitude":          21.0023,
-                "longitude":         105.8412,
+
                 "assigned_staff_id": exec_user["user_id"]
             },
             {
@@ -94,8 +93,7 @@ def init_seed():
                 "address":           "45 Lê Văn Lương",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-                "latitude":          21.0301,
-                "longitude":         105.7923,
+
                 "assigned_staff_id": exec_user["user_id"]
             },
             {
@@ -106,8 +104,7 @@ def init_seed():
                 "address":           "102 Xuân Thủy",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-                "latitude":          21.0378,
-                "longitude":         105.7845,
+
                 "assigned_staff_id": admin_user["user_id"]
             },
             {
@@ -118,8 +115,7 @@ def init_seed():
                 "address":           "230 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-                "latitude":          20.9956,
-                "longitude":         105.8201,
+
                 "assigned_staff_id": admin_user["user_id"]
             },
             {
@@ -130,8 +126,7 @@ def init_seed():
                 "address":           "78 Giải Phóng",
                 "district":          "Hoàng Mai",
                 "city":              "Hà Nội",
-                "latitude":          20.9812,
-                "longitude":         105.8534,
+
                 "assigned_staff_id": exec_user["user_id"]
             },
             {
@@ -142,8 +137,7 @@ def init_seed():
                 "address":           "33 Đội Cấn",
                 "district":          "Ba Đình",
                 "city":              "Hà Nội",
-                "latitude":          21.0440,
-                "longitude":         105.8339,
+
                 "assigned_staff_id": exec_user["user_id"]
             },
             {
@@ -154,8 +148,7 @@ def init_seed():
                 "address":           "156 Bạch Mai",
                 "district":          "Hai Bà Trưng",
                 "city":              "Hà Nội",
-                "latitude":          21.0020,
-                "longitude":         105.8500,
+
                 "assigned_staff_id": admin_user["user_id"]
             },
         ]
@@ -166,13 +159,13 @@ def init_seed():
                 INSERT OR IGNORE INTO stores
                     (store_name, store_type, owner_name, phone,
                      address, district, city,
-                     latitude, longitude, assigned_staff_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      assigned_staff_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     s["store_name"], s["store_type"], s["owner_name"], s["phone"],
                     s["address"],   s["district"],   s["city"],
-                    s["latitude"],  s["longitude"],  s["assigned_staff_id"]
+                      s["assigned_staff_id"]
                 )
             )
             print(f"  + Store: {s['store_name']} ({s['store_type']}) — {s['district']}")
