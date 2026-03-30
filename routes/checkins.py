@@ -43,14 +43,35 @@ def create_checkin(current_user):
             conn.close()
             return jsonify({"success": False, "message": "You are not assigned to this store."}), 403
 
-    cursor = conn.execute(
-        """
-        INSERT INTO store_checks
-            (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status)
-        VALUES (?, ?, 0, 0, 1, ?, 'pending')
-        """,
-        (data["store_id"], current_user["user_id"], data.get("note"))
-    )
+    # Optional check_time override from client (format: "YYYY-MM-DD HH:MM:SS")
+    from datetime import datetime
+    check_time = None
+    raw_time = data.get("check_time")
+    if raw_time:
+        try:
+            check_time = datetime.strptime(raw_time, "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            conn.close()
+            return jsonify({"success": False, "message": "check_time must be in format YYYY-MM-DD HH:MM:SS."}), 400
+
+    if check_time:
+        cursor = conn.execute(
+            """
+            INSERT INTO store_checks
+                (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status, check_time)
+            VALUES (?, ?, 0.0, 0.0, 1, ?, 'completed', ?)
+            """,
+            (data["store_id"], current_user["user_id"], data.get("note"), check_time)
+        )
+    else:
+        cursor = conn.execute(
+            """
+            INSERT INTO store_checks
+                (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status)
+            VALUES (?, ?, 0.0, 0.0, 1, ?, 'completed')
+            """,
+            (data["store_id"], current_user["user_id"], data.get("note"))
+        )
     conn.commit()
     check_id = cursor.lastrowid
     conn.close()

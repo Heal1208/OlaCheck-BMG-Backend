@@ -82,8 +82,7 @@ def init_seed():
                 "address":           "12 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": exec_user["user_id"]
+                "assigned_staff_id": exec_user["user_id"],
             },
             {
                 "store_name":        "Tạp hóa Minh Đức",
@@ -93,8 +92,7 @@ def init_seed():
                 "address":           "45 Lê Văn Lương",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": exec_user["user_id"]
+                "assigned_staff_id": exec_user["user_id"],
             },
             {
                 "store_name":        "WinMart Cầu Giấy",
@@ -104,8 +102,7 @@ def init_seed():
                 "address":           "102 Xuân Thủy",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": admin_user["user_id"]
+                "assigned_staff_id": admin_user["user_id"],
             },
             {
                 "store_name":        "WinMart Thanh Xuân",
@@ -115,8 +112,7 @@ def init_seed():
                 "address":           "230 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": admin_user["user_id"]
+                "assigned_staff_id": admin_user["user_id"],
             },
             {
                 "store_name":        "Đại lý Hoàng Phát",
@@ -126,8 +122,7 @@ def init_seed():
                 "address":           "78 Giải Phóng",
                 "district":          "Hoàng Mai",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": exec_user["user_id"]
+                "assigned_staff_id": exec_user["user_id"],
             },
             {
                 "store_name":        "Tạp hóa Thu Hương",
@@ -137,8 +132,7 @@ def init_seed():
                 "address":           "33 Đội Cấn",
                 "district":          "Ba Đình",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": exec_user["user_id"]
+                "assigned_staff_id": exec_user["user_id"],
             },
             {
                 "store_name":        "Đại lý Phúc Thịnh",
@@ -148,8 +142,7 @@ def init_seed():
                 "address":           "156 Bạch Mai",
                 "district":          "Hai Bà Trưng",
                 "city":              "Hà Nội",
-
-                "assigned_staff_id": admin_user["user_id"]
+                "assigned_staff_id": admin_user["user_id"],
             },
         ]
 
@@ -158,24 +151,23 @@ def init_seed():
                 """
                 INSERT OR IGNORE INTO stores
                     (store_name, store_type, owner_name, phone,
-                     address, district, city,
-                      assigned_staff_id)
+                     address, district, city, assigned_staff_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     s["store_name"], s["store_type"], s["owner_name"], s["phone"],
-                    s["address"],   s["district"],   s["city"],
-                      s["assigned_staff_id"]
+                    s["address"],   s["district"],   s["city"],        s["assigned_staff_id"],
                 )
             )
             print(f"  + Store: {s['store_name']} ({s['store_type']}) — {s['district']}")
 
     # Seed products
+    # category phải nằm trong CHECK constraint: ('Sunflower','Olive','Flaxseed','Rapeseed')
     PRODUCTS = [
-        {"product_name": "Olasun Sunflower Oil 1L",  "sku": "OLA-1L",  "category": "Sunflower Oil", "unit": "bottle", "low_stock_threshold": 10},
-        {"product_name": "Olasun Sunflower Oil 2L",  "sku": "OLA-2L",  "category": "Sunflower Oil", "unit": "bottle", "low_stock_threshold": 8},
-        {"product_name": "Olasun Sunflower Oil 5L",  "sku": "OLA-5L",  "category": "Sunflower Oil", "unit": "bottle", "low_stock_threshold": 5},
-        {"product_name": "Olasun Sunflower Oil 500ml","sku": "OLA-500ML","category": "Sunflower Oil","unit": "bottle", "low_stock_threshold": 15},
+        {"product_name": "Olasun Sunflower Oil 500ml", "sku": "OLA-500ML", "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 15},
+        {"product_name": "Olasun Sunflower Oil 1L",    "sku": "OLA-1L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 10},
+        {"product_name": "Olasun Sunflower Oil 2L",    "sku": "OLA-2L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 8},
+        {"product_name": "Olasun Sunflower Oil 5L",    "sku": "OLA-5L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 5},
     ]
 
     for p in PRODUCTS:
