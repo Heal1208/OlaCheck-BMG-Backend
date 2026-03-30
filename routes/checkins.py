@@ -58,8 +58,8 @@ def create_checkin(current_user):
         cursor = conn.execute(
             """
             INSERT INTO store_checks
-                (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status, check_time)
-            VALUES (?, ?, 0.0, 0.0, 1, ?, 'completed', ?)
+                (store_id, staff_id, note, status, check_time)
+            VALUES (?, ?, ?, 'completed', ?)
             """,
             (data["store_id"], current_user["user_id"], data.get("note"), check_time)
         )
@@ -67,8 +67,8 @@ def create_checkin(current_user):
         cursor = conn.execute(
             """
             INSERT INTO store_checks
-                (store_id, staff_id, gps_lat, gps_lng, gps_verified, note, status)
-            VALUES (?, ?, 0.0, 0.0, 1, ?, 'completed')
+                (store_id, staff_id, note, status, CURRENT_TIMESTAMP)
+            VALUES (?, ?, ?, 'completed', ?)
             """,
             (data["store_id"], current_user["user_id"], data.get("note"))
         )

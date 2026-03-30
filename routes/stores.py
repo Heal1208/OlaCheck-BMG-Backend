@@ -21,7 +21,7 @@ def get_assigned_stores(current_user):
             SELECT  s.store_id, s.store_name, s.store_type,
                     s.owner_name, s.phone,
                     s.address, s.district, s.city,
-                    s.is_active, s.created_at,
+                    s.is_active,
                     u.full_name AS assigned_staff_name,
                     u.user_id   AS assigned_staff_id
             FROM    stores s
@@ -36,8 +36,8 @@ def get_assigned_stores(current_user):
             SELECT  s.store_id, s.store_name, s.store_type,
                     s.owner_name, s.phone,
                     s.address, s.district, s.city,
-                    s.latitude, s.longitude,
-                    s.is_active, s.created_at,
+                    
+                    s.is_active,
                     u.full_name AS assigned_staff_name,
                     u.user_id   AS assigned_staff_id
             FROM    stores s
@@ -72,7 +72,7 @@ def search_stores(current_user):
         SELECT  s.store_id, s.store_name, s.store_type,
                 s.owner_name, s.phone,
                 s.address, s.district, s.city,
-                s.latitude, s.longitude,
+                
                 u.full_name AS assigned_staff_name
         FROM    stores s
         JOIN    users  u ON s.assigned_staff_id = u.user_id
