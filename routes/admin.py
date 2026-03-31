@@ -122,7 +122,6 @@ def update_store(current_user, store_id):
         conn.close()
         return jsonify({"success": False, "message": "No fields to update."}), 400
 
-    fields.append("updated_at = CURRENT_TIMESTAMP")
     values.append(store_id)
     conn.execute(f"UPDATE stores SET {', '.join(fields)} WHERE store_id = ?", values)
     conn.commit()
@@ -141,7 +140,7 @@ def delete_store(current_user, store_id):
         conn.close()
         return jsonify({"success": False, "message": "Store not found or already deleted."}), 404
 
-    conn.execute("UPDATE stores SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE store_id = ?", (store_id,))
+    conn.execute("UPDATE stores SET is_active = 0 WHERE store_id = ?", (store_id,))
     conn.commit()
     conn.close()
     return jsonify({"success": True, "message": "Store deleted successfully."}), 200
@@ -159,7 +158,7 @@ def list_staff(current_user):
 
     query       = """
         SELECT  u.user_id, u.full_name, u.email, u.phone,
-                u.is_active, u.created_at, u.updated_at,
+                u.is_active,
                 r.role_id, r.role_name
         FROM    users u
         JOIN    roles r ON u.role_id = r.role_id
@@ -252,7 +251,6 @@ def update_staff(current_user, user_id):
         conn.close()
         return jsonify({"success": False, "message": "No fields to update."}), 400
 
-    fields.append("updated_at = CURRENT_TIMESTAMP")
     values.append(user_id)
     conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?", values)
     conn.commit()
@@ -273,7 +271,7 @@ def delete_staff(current_user, user_id):
         conn.close()
         return jsonify({"success": False, "message": "Staff not found or already inactive."}), 404
 
-    conn.execute("UPDATE users SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?", (user_id,))
+    conn.execute("UPDATE users SET is_active = 0 WHERE user_id = ?", (user_id,))
     conn.commit()
     conn.close()
     return jsonify({"success": True, "message": "Staff account deactivated successfully."}), 200

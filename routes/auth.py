@@ -55,13 +55,8 @@ def login():
 @auth_bp.route("/logout", methods=["POST"])
 @token_required
 def logout(current_user):
-    conn = get_db()
-    conn.execute(
-        "UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
-        (current_user["user_id"],)
-    )
-    conn.commit()
-    conn.close()
+    # Session is stateless (JWT) — nothing to invalidate server-side.
+    # Client clears the token; we just return success.
     return jsonify({"success": True, "message": "Logged out successfully."}), 200
 
 
@@ -90,7 +85,7 @@ def change_password(current_user):
         return jsonify({"success": False, "message": "Current password is incorrect."}), 401
 
     conn.execute(
-        "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+        "UPDATE users SET password_hash = ? WHERE user_id = ?",
         (hash_password(data["new_password"]), current_user["user_id"])
     )
     conn.commit()
