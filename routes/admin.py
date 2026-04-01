@@ -1,17 +1,15 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
-from utils import token_required, role_required, hash_password
+from utils import token_required, role_required, hash_password, MANAGER_AND_ABOVE, ADMIN_AND_ABOVE
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
-ADMIN_ROLES       = ("Sales_Admin", "Sales_Manager", "Director", "Deputy_Director")
-MANAGER_ROLES     = ("Sales_Manager", "Director", "Deputy_Director")
 VALID_STORE_TYPES = ("grocery", "supermarket", "agency")
 
 
 @admin_bp.route("/stores", methods=["GET"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def list_stores(current_user):
     page       = max(int(request.args.get("page", 1)), 1)
     per_page   = min(int(request.args.get("per_page", 20)), 100)
@@ -23,7 +21,6 @@ def list_stores(current_user):
         SELECT  s.store_id, s.store_name, s.store_type,
                 s.owner_name, s.phone,
                 s.address, s.district, s.city,
-                s.latitude, s.longitude,
                 s.is_active, s.created_at, s.updated_at,
                 u.full_name AS assigned_staff_name,
                 u.user_id   AS assigned_staff_id
@@ -60,11 +57,11 @@ def list_stores(current_user):
 
 @admin_bp.route("/stores", methods=["POST"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def create_store(current_user):
     data = request.get_json()
 
-    required = ["store_name", "store_type", "owner_name", "phone", "address", "district", "city", "latitude", "longitude", "assigned_staff_id"]
+    required = ["store_name", "store_type", "owner_name", "phone", "address", "district", "city", "assigned_staff_id"]
     missing  = [f for f in required if not data.get(f) and data.get(f) != 0]
     if missing:
         return jsonify({"success": False, "message": f"Missing required fields: {', '.join(missing)}"}), 400
@@ -83,8 +80,9 @@ def create_store(current_user):
         return jsonify({"success": False, "message": "Phone number already exists."}), 409
 
     cursor = conn.execute(
-        "INSERT INTO stores (store_name, store_type, owner_name, phone, address, district, city, latitude, longitude, assigned_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (data["store_name"], data["store_type"], data["owner_name"], data["phone"], data["address"], data["district"], data["city"], data["latitude"], data["longitude"], data["assigned_staff_id"])
+        "INSERT INTO stores (store_name, store_type, owner_name, phone, address, district, city, assigned_staff_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (data["store_name"], data["store_type"], data["owner_name"], data["phone"],
+         data["address"], data["district"], data["city"], data["assigned_staff_id"])
     )
     conn.commit()
     new_id = cursor.lastrowid
@@ -95,7 +93,7 @@ def create_store(current_user):
 
 @admin_bp.route("/stores/<int:store_id>", methods=["PUT"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def update_store(current_user, store_id):
     data  = request.get_json()
     conn  = get_db()
@@ -114,7 +112,7 @@ def update_store(current_user, store_id):
             conn.close()
             return jsonify({"success": False, "message": "Assigned staff not found or is inactive."}), 404
 
-    updatable = ["store_name", "store_type", "owner_name", "phone", "address", "district", "city", "latitude", "longitude", "assigned_staff_id", "is_active"]
+    updatable = ["store_name", "store_type", "owner_name", "phone", "address", "district", "city", "assigned_staff_id", "is_active"]
     fields    = [f"{f} = ?" for f in updatable if f in data]
     values    = [data[f]    for f in updatable if f in data]
 
@@ -132,7 +130,7 @@ def update_store(current_user, store_id):
 
 @admin_bp.route("/stores/<int:store_id>", methods=["DELETE"])
 @token_required
-@role_required(*MANAGER_ROLES)
+@role_required(*ADMIN_AND_ABOVE)
 def delete_store(current_user, store_id):
     conn  = get_db()
     store = conn.execute("SELECT store_id FROM stores WHERE store_id = ? AND is_active = 1", (store_id,)).fetchone()
@@ -148,7 +146,7 @@ def delete_store(current_user, store_id):
 
 @admin_bp.route("/staff", methods=["GET"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def list_staff(current_user):
     page      = max(int(request.args.get("page", 1)), 1)
     per_page  = min(int(request.args.get("per_page", 20)), 100)
@@ -193,7 +191,7 @@ def list_staff(current_user):
 
 @admin_bp.route("/staff", methods=["POST"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def create_staff(current_user):
     data    = request.get_json()
     required = ["full_name", "email", "phone", "password", "role_id"]
@@ -230,7 +228,7 @@ def create_staff(current_user):
 
 @admin_bp.route("/staff/<int:user_id>", methods=["PUT"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def update_staff(current_user, user_id):
     data = request.get_json()
     conn = get_db()
@@ -261,7 +259,7 @@ def update_staff(current_user, user_id):
 
 @admin_bp.route("/staff/<int:user_id>", methods=["DELETE"])
 @token_required
-@role_required(*MANAGER_ROLES)
+@role_required(*ADMIN_AND_ABOVE)
 def delete_staff(current_user, user_id):
     if user_id == current_user["user_id"]:
         return jsonify({"success": False, "message": "You cannot deactivate your own account."}), 400
@@ -279,7 +277,7 @@ def delete_staff(current_user, user_id):
 
 @admin_bp.route("/roles", methods=["GET"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def list_roles(current_user):
     conn  = get_db()
     roles = conn.execute("SELECT role_id, role_name, description FROM roles ORDER BY role_id").fetchall()

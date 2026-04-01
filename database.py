@@ -43,36 +43,74 @@ def init_seed():
         """
     )
 
+    # ─── 3 roles mới ─────────────────────────────────────────────────────────
+    # Admin   : Director / Deputy_Director / Sales_Manager — toàn quyền
+    # Manager : Sales_Admin / Sales_Executive / ... — vận hành & theo dõi
+    # Staff   : nhân viên tuyến — chỉ dùng Mobile App
+    ROLES = [
+        {
+            "role_name":   "Admin",
+            "description": "Quản trị viên hệ thống / Trưởng phòng kinh doanh — toàn quyền Web Admin, quản lý nhân sự, cấu hình hệ thống, xem báo cáo tổng quan."
+        },
+        {
+            "role_name":   "Manager",
+            "description": "Quản lý cấp trung (Sales Admin, Sales Executive, ...) — theo dõi cửa hàng, xem cảnh báo tồn kho, hỗ trợ vận hành, check-in điểm bán."
+        },
+        {
+            "role_name":   "Staff",
+            "description": "Nhân viên tuyến — chỉ sử dụng Mobile App để check-in, nhập tồn kho và kiểm tra hạn sử dụng."
+        },
+    ]
+
+    for r in ROLES:
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (role_name, description) VALUES (?, ?)",
+            (r["role_name"], r["description"])
+        )
+
+    # ─── Lấy role_id ─────────────────────────────────────────────────────────
+    role_ids = {
+        r["role_name"]: r["role_id"]
+        for r in conn.execute("SELECT role_id, role_name FROM roles").fetchall()
+    }
+
+    # ─── Seed users ──────────────────────────────────────────────────────────
+    # Mật khẩu mặc định: bmg@2025 (8+ ký tự)
     USERS = [
-        {"full_name": "Director",          "email": "director@bmg.com",         "phone": "0901000001", "password": "123", "role_name": "Director"},
-        {"full_name": "Deputy Director",   "email": "deputydirector@bmg.com",   "phone": "0901000002", "password": "123", "role_name": "Deputy_Director"},
-        {"full_name": "Sales Manager",     "email": "salesmanager@bmg.com",     "phone": "0901000003", "password": "123", "role_name": "Sales_Manager"},
-        {"full_name": "Sales Executive",   "email": "salesexecutive@bmg.com",   "phone": "0901000004", "password": "123", "role_name": "Sales_Executive"},
-        {"full_name": "Sales Admin",       "email": "salesadmin@bmg.com",       "phone": "0901000005", "password": "123", "role_name": "Sales_Admin"},
-        {"full_name": "Warehouse Manager", "email": "warehousemanager@bmg.com", "phone": "0901000006", "password": "123", "role_name": "Warehouse_Manager"},
-        {"full_name": "Delivery",          "email": "delivery@bmg.com",         "phone": "0901000007", "password": "123", "role_name": "Delivery"},
-        {"full_name": "Accountant",        "email": "accountant@bmg.com",       "phone": "0901000008", "password": "123", "role_name": "Accountant"},
-        {"full_name": "HR Admin",          "email": "hradmin@bmg.com",          "phone": "0901000009", "password": "123", "role_name": "HR_Admin"},
+        # Admin level
+        {"full_name": "Giám đốc",           "email": "director@bmg.com",       "phone": "0901000001", "password": "bmg@2025", "role": "Admin"},
+        {"full_name": "Phó Giám đốc",        "email": "deputydirector@bmg.com", "phone": "0901000002", "password": "bmg@2025", "role": "Admin"},
+        {"full_name": "Trưởng phòng KD",     "email": "salesmanager@bmg.com",   "phone": "0901000003", "password": "bmg@2025", "role": "Admin"},
+        # Manager level
+        {"full_name": "Sales Admin Nguyễn",  "email": "salesadmin@bmg.com",     "phone": "0901000004", "password": "bmg@2025", "role": "Manager"},
+        {"full_name": "Sales Admin Trần",    "email": "salesadmin2@bmg.com",    "phone": "0901000005", "password": "bmg@2025", "role": "Manager"},
+        # Staff level
+        {"full_name": "NV Nguyễn Văn An",   "email": "staff1@bmg.com",         "phone": "0901000006", "password": "bmg@2025", "role": "Staff"},
+        {"full_name": "NV Trần Thị Bình",   "email": "staff2@bmg.com",         "phone": "0901000007", "password": "bmg@2025", "role": "Staff"},
+        {"full_name": "NV Lê Văn Cường",    "email": "staff3@bmg.com",         "phone": "0901000008", "password": "bmg@2025", "role": "Staff"},
     ]
 
     for u in USERS:
-        role = conn.execute(
-            "SELECT role_id FROM roles WHERE role_name = ?", (u["role_name"],)
-        ).fetchone()
-        if not role:
-            print(f"  ! Role '{u['role_name']}' not found — skipped.")
+        rid = role_ids.get(u["role"])
+        if not rid:
+            print(f"  ! Role '{u['role']}' not found — skipped.")
             continue
         conn.execute(
             "INSERT OR IGNORE INTO users (full_name, email, phone, password_hash, role_id) VALUES (?, ?, ?, ?, ?)",
-            (u["full_name"], u["email"], u["phone"], hash_password(u["password"]), role["role_id"])
+            (u["full_name"], u["email"], u["phone"], hash_password(u["password"]), rid)
         )
-        print(f"  + {u['role_name']:20} | {u['email']:35} | pass: {u['password']}")
+        print(f"  + [{u['role']:8}] {u['email']:35} | pass: {u['password']}")
 
-    # Lấy user_id của Sales Executive và Sales Admin để gán stores
-    exec_user  = conn.execute("SELECT user_id FROM users WHERE email = 'salesexecutive@bmg.com'").fetchone()
-    admin_user = conn.execute("SELECT user_id FROM users WHERE email = 'salesadmin@bmg.com'").fetchone()
+    conn.commit()
 
-    if exec_user and admin_user:
+    # ─── Lấy user_id để gán stores ───────────────────────────────────────────
+    manager1 = conn.execute("SELECT user_id FROM users WHERE email = 'salesadmin@bmg.com'").fetchone()
+    manager2 = conn.execute("SELECT user_id FROM users WHERE email = 'salesadmin2@bmg.com'").fetchone()
+    staff1   = conn.execute("SELECT user_id FROM users WHERE email = 'staff1@bmg.com'").fetchone()
+    staff2   = conn.execute("SELECT user_id FROM users WHERE email = 'staff2@bmg.com'").fetchone()
+    staff3   = conn.execute("SELECT user_id FROM users WHERE email = 'staff3@bmg.com'").fetchone()
+
+    if all([manager1, manager2, staff1, staff2, staff3]):
         STORES = [
             {
                 "store_name":        "Tạp hóa Bà Lan",
@@ -82,7 +120,7 @@ def init_seed():
                 "address":           "12 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-                "assigned_staff_id": exec_user["user_id"],
+                "assigned_staff_id": staff1["user_id"],
             },
             {
                 "store_name":        "Tạp hóa Minh Đức",
@@ -92,7 +130,7 @@ def init_seed():
                 "address":           "45 Lê Văn Lương",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-                "assigned_staff_id": exec_user["user_id"],
+                "assigned_staff_id": staff1["user_id"],
             },
             {
                 "store_name":        "WinMart Cầu Giấy",
@@ -102,7 +140,7 @@ def init_seed():
                 "address":           "102 Xuân Thủy",
                 "district":          "Cầu Giấy",
                 "city":              "Hà Nội",
-                "assigned_staff_id": admin_user["user_id"],
+                "assigned_staff_id": staff2["user_id"],
             },
             {
                 "store_name":        "WinMart Thanh Xuân",
@@ -112,7 +150,7 @@ def init_seed():
                 "address":           "230 Nguyễn Trãi",
                 "district":          "Thanh Xuân",
                 "city":              "Hà Nội",
-                "assigned_staff_id": admin_user["user_id"],
+                "assigned_staff_id": staff2["user_id"],
             },
             {
                 "store_name":        "Đại lý Hoàng Phát",
@@ -122,7 +160,7 @@ def init_seed():
                 "address":           "78 Giải Phóng",
                 "district":          "Hoàng Mai",
                 "city":              "Hà Nội",
-                "assigned_staff_id": exec_user["user_id"],
+                "assigned_staff_id": staff3["user_id"],
             },
             {
                 "store_name":        "Tạp hóa Thu Hương",
@@ -132,7 +170,7 @@ def init_seed():
                 "address":           "33 Đội Cấn",
                 "district":          "Ba Đình",
                 "city":              "Hà Nội",
-                "assigned_staff_id": exec_user["user_id"],
+                "assigned_staff_id": staff3["user_id"],
             },
             {
                 "store_name":        "Đại lý Phúc Thịnh",
@@ -142,7 +180,7 @@ def init_seed():
                 "address":           "156 Bạch Mai",
                 "district":          "Hai Bà Trưng",
                 "city":              "Hà Nội",
-                "assigned_staff_id": admin_user["user_id"],
+                "assigned_staff_id": staff1["user_id"],
             },
         ]
 
@@ -161,13 +199,12 @@ def init_seed():
             )
             print(f"  + Store: {s['store_name']} ({s['store_type']}) — {s['district']}")
 
-    # Seed products
-    # category phải nằm trong CHECK constraint: ('Sunflower','Olive','Flaxseed','Rapeseed')
+    # ─── Seed products ────────────────────────────────────────────────────────
     PRODUCTS = [
         {"product_name": "Olasun Sunflower Oil 500ml", "sku": "OLA-500ML", "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 15},
-        {"product_name": "Olasun Sunflower Oil 1L",    "sku": "OLA-1L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 10},
-        {"product_name": "Olasun Sunflower Oil 2L",    "sku": "OLA-2L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 8},
-        {"product_name": "Olasun Sunflower Oil 5L",    "sku": "OLA-5L",   "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 5},
+        {"product_name": "Olasun Sunflower Oil 1L",    "sku": "OLA-1L",    "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 10},
+        {"product_name": "Olasun Sunflower Oil 2L",    "sku": "OLA-2L",    "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 8},
+        {"product_name": "Olasun Sunflower Oil 5L",    "sku": "OLA-5L",    "category": "Sunflower", "unit": "bottle", "low_stock_threshold": 5},
     ]
 
     for p in PRODUCTS:

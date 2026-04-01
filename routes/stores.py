@@ -1,21 +1,19 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
-from utils import token_required, role_required
+from utils import token_required, role_required, MANAGER_AND_ABOVE, ALL_FIELD_ROLES
 
 stores_bp = Blueprint("stores", __name__, url_prefix="/api/stores")
-
-SALES_ROLES   = ("Sales_Executive", "Sales_Admin", "Sales_Manager", "Director", "Deputy_Director")
-MANAGER_ROLES = ("Sales_Manager", "Director", "Deputy_Director")
 
 
 @stores_bp.route("/assigned", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def get_assigned_stores(current_user):
     conn = get_db()
-    is_manager = current_user["role"] in MANAGER_ROLES
+    is_admin_or_manager = current_user["role"] in ("Admin", "Manager")
 
-    if is_manager:
+    if is_admin_or_manager:
+        # Admin và Manager thấy tất cả stores đang active
         stores = conn.execute(
             """
             SELECT  s.store_id, s.store_name, s.store_type,
@@ -31,12 +29,12 @@ def get_assigned_stores(current_user):
             """
         ).fetchall()
     else:
+        # Staff chỉ thấy stores được giao cho mình
         stores = conn.execute(
             """
             SELECT  s.store_id, s.store_name, s.store_type,
                     s.owner_name, s.phone,
                     s.address, s.district, s.city,
-                    
                     s.is_active,
                     u.full_name AS assigned_staff_name,
                     u.user_id   AS assigned_staff_id
@@ -55,7 +53,7 @@ def get_assigned_stores(current_user):
 
 @stores_bp.route("/search", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def search_stores(current_user):
     keyword    = request.args.get("q", "").strip()
     district   = request.args.get("district", "").strip()
@@ -72,7 +70,6 @@ def search_stores(current_user):
         SELECT  s.store_id, s.store_name, s.store_type,
                 s.owner_name, s.phone,
                 s.address, s.district, s.city,
-                
                 u.full_name AS assigned_staff_name
         FROM    stores s
         JOIN    users  u ON s.assigned_staff_id = u.user_id
@@ -108,7 +105,7 @@ def search_stores(current_user):
 
 @stores_bp.route("/<int:store_id>", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def get_store_detail(current_user, store_id):
     conn  = get_db()
     store = conn.execute(

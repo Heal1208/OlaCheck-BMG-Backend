@@ -9,6 +9,15 @@ import os
 SECRET_KEY   = os.environ.get("SECRET_KEY", "bmg-secret-key-change-in-production")
 TOKEN_EXPIRY = int(os.environ.get("TOKEN_EXPIRY_HOURS", 24))
 
+# ─── Role constants ───────────────────────────────────────────────────────────
+ROLE_ADMIN   = "Admin"    # Director / Deputy_Director / Sales_Manager
+ROLE_MANAGER = "Manager"  # Sales_Admin / Sales_Executive / ...
+ROLE_STAFF   = "Staff"    # Nhân viên tuyến
+
+ALL_ROLES         = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)
+ADMIN_AND_ABOVE   = (ROLE_ADMIN,)
+MANAGER_AND_ABOVE = (ROLE_ADMIN, ROLE_MANAGER)
+ALL_FIELD_ROLES   = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)  # tất cả đều có thể check-in
 
 def hash_password(plain: str) -> str:
     salt = secrets.token_hex(16)

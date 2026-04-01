@@ -1,25 +1,19 @@
 from flask import Blueprint, request, jsonify
 from database import get_db
-from utils import token_required, role_required
+from utils import token_required, role_required, ALL_FIELD_ROLES, MANAGER_AND_ABOVE
 
 checkins_bp = Blueprint("checkins", __name__, url_prefix="/api")
 
-SALES_ROLES = (
-    "Sales_Executive", "Sales_Admin", "Sales_Manager",
-    "Director", "Deputy_Director"
-)
-ADMIN_ROLES = ("Sales_Admin", "Sales_Manager", "Director", "Deputy_Director")
+NEAR_EXPIRY_DAYS = 30
 
 
 # ================================================================
 # A-07: Store Check-in
 # ================================================================
 
-# POST /api/checkins
-# Body: { store_id, note? }
 @checkins_bp.route("/checkins", methods=["POST"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def create_checkin(current_user):
     data = request.get_json()
 
@@ -37,13 +31,13 @@ def create_checkin(current_user):
         conn.close()
         return jsonify({"success": False, "message": "Store not found."}), 404
 
-    manager_roles = ("Sales_Manager", "Director", "Deputy_Director")
-    if current_user["role"] not in manager_roles:
+    # Admin và Manager có thể check-in bất kỳ store nào
+    # Staff chỉ check-in store được giao
+    if current_user["role"] == "Staff":
         if store["assigned_staff_id"] != current_user["user_id"]:
             conn.close()
             return jsonify({"success": False, "message": "You are not assigned to this store."}), 403
 
-    # Optional check_time override from client (format: "YYYY-MM-DD HH:MM:SS")
     from datetime import datetime
     check_time = None
     raw_time = data.get("check_time")
@@ -56,22 +50,15 @@ def create_checkin(current_user):
 
     if check_time:
         cursor = conn.execute(
-            """
-            INSERT INTO store_checks
-                (store_id, staff_id, note, status, check_time)
-            VALUES (?, ?, ?, 'completed', ?)
-            """,
+            "INSERT INTO store_checks (store_id, staff_id, note, status, check_time) VALUES (?, ?, ?, 'completed', ?)",
             (data["store_id"], current_user["user_id"], data.get("note"), check_time)
         )
     else:
         cursor = conn.execute(
-            """
-            INSERT INTO store_checks
-                (store_id, staff_id, note, status, CURRENT_TIMESTAMP)
-            VALUES (?, ?, ?, 'completed', ?)
-            """,
+            "INSERT INTO store_checks (store_id, staff_id, note, status) VALUES (?, ?, ?, 'completed')",
             (data["store_id"], current_user["user_id"], data.get("note"))
         )
+
     conn.commit()
     check_id = cursor.lastrowid
     conn.close()
@@ -86,10 +73,9 @@ def create_checkin(current_user):
     }), 201
 
 
-# GET /api/checkins
 @checkins_bp.route("/checkins", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def list_checkins(current_user):
     store_id = request.args.get("store_id")
     date     = request.args.get("date")
@@ -105,7 +91,7 @@ def list_checkins(current_user):
     """
     params = []
 
-    if current_user["role"] not in ("Sales_Manager", "Director", "Deputy_Director"):
+    if current_user["role"] == "Staff":
         query += " AND c.staff_id = ?"
         params.append(current_user["user_id"])
 
@@ -126,10 +112,9 @@ def list_checkins(current_user):
     return jsonify({"success": True, "data": [dict(c) for c in checks]}), 200
 
 
-# GET /api/checkins/<check_id>
 @checkins_bp.route("/checkins/<int:check_id>", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def get_checkin(current_user, check_id):
     conn  = get_db()
     check = conn.execute(
@@ -150,10 +135,9 @@ def get_checkin(current_user, check_id):
     return jsonify({"success": True, "data": dict(check)}), 200
 
 
-# PUT /api/checkins/<check_id>/complete
 @checkins_bp.route("/checkins/<int:check_id>/complete", methods=["PUT"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def complete_checkin(current_user, check_id):
     conn  = get_db()
     check = conn.execute(
@@ -183,11 +167,9 @@ def complete_checkin(current_user, check_id):
 # A-08: Stock Entry
 # ================================================================
 
-# POST /api/checkins/<check_id>/stock-entries
-# Body: { entries: [{ product_id, quantity_on_shelf }] }
 @checkins_bp.route("/checkins/<int:check_id>/stock-entries", methods=["POST"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def create_stock_entries(current_user, check_id):
     data = request.get_json()
 
@@ -279,10 +261,9 @@ def create_stock_entries(current_user, check_id):
     }), 201
 
 
-# GET /api/checkins/<check_id>/stock-entries
 @checkins_bp.route("/checkins/<int:check_id>/stock-entries", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def get_stock_entries(current_user, check_id):
     conn    = get_db()
     entries = conn.execute(
@@ -305,12 +286,9 @@ def get_stock_entries(current_user, check_id):
 # A-09: Expiry Date Check
 # ================================================================
 
-NEAR_EXPIRY_DAYS = 30
-
-# POST /api/stock-entries/<entry_id>/expiry-records
 @checkins_bp.route("/stock-entries/<int:entry_id>/expiry-records", methods=["POST"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def create_expiry_record(current_user, entry_id):
     data = request.get_json()
 
@@ -380,10 +358,9 @@ def create_expiry_record(current_user, entry_id):
     }), 201
 
 
-# GET /api/stock-entries/<entry_id>/expiry-records
 @checkins_bp.route("/stock-entries/<int:entry_id>/expiry-records", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def get_expiry_records(current_user, entry_id):
     conn    = get_db()
     records = conn.execute(
@@ -396,13 +373,12 @@ def get_expiry_records(current_user, entry_id):
 
 
 # ================================================================
-# A-10: Low Stock Alerts
+# A-10: Low Stock Alerts  — Admin + Manager có thể xem và resolve
 # ================================================================
 
-# GET /api/alerts
 @checkins_bp.route("/alerts", methods=["GET"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def list_alerts(current_user):
     store_id    = request.args.get("store_id")
     alert_type  = request.args.get("alert_type")
@@ -444,10 +420,9 @@ def list_alerts(current_user):
     return jsonify({"success": True, "data": {"total": len(alerts), "alerts": [dict(a) for a in alerts]}}), 200
 
 
-# PUT /api/alerts/<alert_id>/resolve
 @checkins_bp.route("/alerts/<int:alert_id>/resolve", methods=["PUT"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def resolve_alert(current_user, alert_id):
     conn  = get_db()
     alert = conn.execute(
@@ -476,7 +451,7 @@ def resolve_alert(current_user, alert_id):
 # GET /api/products
 @checkins_bp.route("/products", methods=["GET"])
 @token_required
-@role_required(*SALES_ROLES)
+@role_required(*ALL_FIELD_ROLES)
 def list_products(current_user):
     conn     = get_db()
     products = conn.execute(
@@ -490,7 +465,7 @@ def list_products(current_user):
 # POST /api/products
 @checkins_bp.route("/products", methods=["POST"])
 @token_required
-@role_required(*ADMIN_ROLES)
+@role_required(*MANAGER_AND_ABOVE)
 def create_product(current_user):
     data    = request.get_json()
     required = ["product_name", "sku", "category"]
