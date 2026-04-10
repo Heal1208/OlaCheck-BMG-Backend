@@ -8,6 +8,7 @@ conn = sqlite3.connect(DB_PATH)
 conn.execute("PRAGMA foreign_keys = OFF")
 
 conn.execute("DELETE FROM users")
+conn.execute("DELETE FROM stock_alerts")
 conn.execute("DROP TABLE IF EXISTS seed_log")
 
 conn.execute("PRAGMA foreign_keys = ON")
