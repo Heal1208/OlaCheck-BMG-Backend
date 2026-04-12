@@ -9,6 +9,9 @@ from routes.auth     import auth_bp
 from routes.stores   import stores_bp
 from routes.admin    import admin_bp
 from routes.checkins import checkins_bp
+from routes.stats    import stats_bp
+from routes.recovery import recovery_bp
+
 
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +20,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(stores_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(checkins_bp)
+app.register_blueprint(stats_bp)
+app.register_blueprint(recovery_bp)
 
 @app.errorhandler(404)
 def not_found(e):
