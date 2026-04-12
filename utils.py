@@ -1,28 +1,31 @@
-import jwt
 import hashlib
-import secrets
-from functools import wraps
-from flask import request, jsonify
-from datetime import datetime, timedelta
 import os
+import secrets
+from datetime import datetime, timedelta
+from functools import wraps
 
-SECRET_KEY   = os.environ.get("SECRET_KEY", "bmg-secret-key-change-in-production")
+import jwt
+from flask import request, jsonify
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "bmg-secret-key-change-in-production")
 TOKEN_EXPIRY = int(os.environ.get("TOKEN_EXPIRY_HOURS", 24))
 
 # ─── Role constants ───────────────────────────────────────────────────────────
-ROLE_ADMIN   = "Admin"    # Director / Deputy_Director / Sales_Manager
+ROLE_ADMIN = "Admin"  # Director / Deputy_Director / Sales_Manager
 ROLE_MANAGER = "Manager"  # Sales_Admin / Sales_Executive / ...
-ROLE_STAFF   = "Staff"    # Nhân viên tuyến
+ROLE_STAFF = "Staff"  # Nhân viên tuyến
 
-ALL_ROLES         = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)
-ADMIN_AND_ABOVE   = (ROLE_ADMIN,)
+ALL_ROLES = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)
+ADMIN_AND_ABOVE = (ROLE_ADMIN,)
 MANAGER_AND_ABOVE = (ROLE_ADMIN, ROLE_MANAGER)
-ALL_FIELD_ROLES   = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)  # tất cả đều có thể check-in
+ALL_FIELD_ROLES = (ROLE_ADMIN, ROLE_MANAGER, ROLE_STAFF)
+
 
 def hash_password(plain: str) -> str:
     salt = secrets.token_hex(16)
-    h    = hashlib.sha256(f"{salt}{plain}".encode()).hexdigest()
+    h = hashlib.sha256(f"{salt}{plain}".encode()).hexdigest()
     return f"{salt}:{h}"
+
 
 def check_password(plain: str, hashed: str) -> bool:
     try:
@@ -35,10 +38,11 @@ def check_password(plain: str, hashed: str) -> bool:
 def generate_token(user_id: int, role: str) -> str:
     payload = {
         "user_id": user_id,
-        "role":    role,
-        "exp":     datetime.utcnow() + timedelta(hours=TOKEN_EXPIRY)
+        "role": role,
+        "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRY)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
 
 def decode_token(token: str) -> dict:
     return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
@@ -48,9 +52,15 @@ def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         token = None
+
+        # 1. Đọc từ Authorization header (ưu tiên)
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
+
+        # 2. Fallback: đọc từ query param ?token=... (dùng cho file download)
+        if not token:
+            token = request.args.get("token", "").strip() or None
 
         if not token:
             return jsonify({
@@ -72,6 +82,7 @@ def token_required(f):
             }), 401
 
         return f(current_user, *args, **kwargs)
+
     return decorated
 
 
@@ -85,5 +96,7 @@ def role_required(*roles):
                     "message": "You do not have permission to perform this action."
                 }), 403
             return f(current_user, *args, **kwargs)
+
         return decorated
+
     return decorator
