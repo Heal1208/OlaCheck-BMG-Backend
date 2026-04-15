@@ -39,6 +39,10 @@ def create_checkin(current_user):
             return jsonify({"success": False, "message": "You are not assigned to this store."}), 403
 
     from datetime import datetime
+    import base64
+    import uuid
+    import os
+
     check_time = None
     raw_time = data.get("check_time")
     if raw_time:
@@ -48,15 +52,35 @@ def create_checkin(current_user):
             conn.close()
             return jsonify({"success": False, "message": "check_time must be in format YYYY-MM-DD HH:MM:SS."}), 400
 
+    photo_path = None
+    photo_data = data.get("photo_data")
+    if photo_data:
+        try:
+            if "base64," in photo_data:
+                header, encoded = photo_data.split("base64,", 1)
+            else:
+                encoded = photo_data
+            img_bytes = base64.b64decode(encoded)
+            upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "uploads")
+            os.makedirs(upload_dir, exist_ok=True)
+            filename = f"checkin_{uuid.uuid4().hex}.jpg"
+            filepath = os.path.join(upload_dir, filename)
+            with open(filepath, "wb") as f:
+                f.write(img_bytes)
+            photo_path = f"/static/uploads/{filename}"
+        except Exception as e:
+            conn.close()
+            return jsonify({"success": False, "message": f"Failed to save photo: {e}"}), 400
+
     if check_time:
         cursor = conn.execute(
-            "INSERT INTO store_checks (store_id, staff_id, note, status, check_time) VALUES (?, ?, ?, 'completed', ?)",
-            (data["store_id"], current_user["user_id"], data.get("note"), check_time)
+            "INSERT INTO store_checks (store_id, staff_id, note, status, check_time, photo_path) VALUES (?, ?, ?, 'completed', ?, ?)",
+            (data["store_id"], current_user["user_id"], data.get("note"), check_time, photo_path)
         )
     else:
         cursor = conn.execute(
-            "INSERT INTO store_checks (store_id, staff_id, note, status) VALUES (?, ?, ?, 'completed')",
-            (data["store_id"], current_user["user_id"], data.get("note"))
+            "INSERT INTO store_checks (store_id, staff_id, note, status, photo_path) VALUES (?, ?, ?, 'completed', ?)",
+            (data["store_id"], current_user["user_id"], data.get("note"), photo_path)
         )
 
     conn.commit()
