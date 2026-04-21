@@ -511,3 +511,36 @@ def create_product(current_user):
     conn.close()
 
     return jsonify({"success": True, "message": "Product created.", "data": {"product_id": new_id}}), 201
+
+
+# PUT /api/products/<product_id>
+@checkins_bp.route("/products/<int:product_id>", methods=["PUT"])
+@token_required
+@role_required(*MANAGER_AND_ABOVE)
+def update_product(current_user, product_id):
+    data = request.get_json()
+    conn = get_db()
+
+    product = conn.execute(
+        "SELECT product_id FROM products WHERE product_id = ? AND is_active = 1",
+        (product_id,)
+    ).fetchone()
+
+    if not product:
+        conn.close()
+        return jsonify({"success": False, "message": "Product not found."}), 404
+
+    updatable = ["product_name", "sku", "category", "unit", "low_stock_threshold"]
+    fields = [f"{f} = ?" for f in updatable if f in data]
+    values = [data[f] for f in updatable if f in data]
+
+    if not fields:
+        conn.close()
+        return jsonify({"success": False, "message": "No fields to update."}), 400
+
+    values.append(product_id)
+    conn.execute(f"UPDATE products SET {', '.join(fields)} WHERE product_id = ?", values)
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True, "message": "Product updated successfully."}), 200
